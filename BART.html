@@ -1,409 +1,467 @@
-import random
-import tkinter as tk
-from tkinter import messagebox
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Balloon Analog Risk Task (BART)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Prevent double-tap zoom & touch delay on mobile */
+    button, canvas {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+  </style>
+</head>
+<body class="bg-[#f4f4f9] text-gray-800 font-sans min-h-screen flex flex-col items-center p-3 sm:p-6">
 
+  <div id="app" class="w-full max-w-4xl bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200 min-h-[600px] flex flex-col justify-center">
+    <!-- Content dynamically injected via JavaScript -->
+  </div>
 
-class BARTApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Balloon Analog Risk Task (BART)")
-        self.root.geometry("900x750")
-        self.root.configure(bg="#f4f4f9")
+  <script>
+    // --- Data & State ---
+    const CATEGORY_DEFINITIONS = [
+      { max_pumps: 128 },
+      { max_pumps: 64 },
+      { max_pumps: 32 }
+    ];
 
-        # Define categories: (Max Pumps, Risk Description)
-        self.category_definitions = [
-            {"max_pumps": 128, },
-            {"max_pumps": 64,},
-            {"max_pumps": 32,}
-        ]
+    const COLOR_PALETTE = [
+      { hex: "#1e88e5", name: "Blue", textDark: false },
+      { hex: "#e53935", name: "Red", textDark: false },
+      { hex: "#fdd835", name: "Yellow", textDark: true },
+      { hex: "#8e24aa", name: "Purple", textDark: false },
+      { hex: "#fb8c00", name: "Orange", textDark: true },
+      { hex: "#00acc1", name: "Cyan", textDark: false },
+      { hex: "#d81b60", name: "Pink", textDark: false }
+    ];
 
-        # Assign distinct random colors for this session
-        self.assign_distinct_random_colors()
+    let state = {
+      trials: [],
+      totalTrials: 90,
+      currentTrialIdx: 0,
+      totalEarned: 0.0,
+      lastBalloonEarned: 0.0,
+      stats: {
+        128: { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
+        64:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
+        32:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 }
+      },
+      currentCat: null,
+      maxPumps: 0,
+      explosionPoint: 0,
+      currentPumps: 0,
+      currentBank: 0.0,
+      isPopping: false
+    };
 
-        # Build 90 trials (30 of each category, shuffled)
-        self.trials = []
-        for cat in self.category_definitions:
-            for _ in range(30):
-                self.trials.append(cat)
-        random.shuffle(self.trials)
+    const app = document.getElementById('app');
 
-        self.total_trials = len(self.trials)
-        self.current_trial_idx = 0
+    // Utility: Shuffle Array
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
 
-        # Tracking metrics
-        self.total_earned = 0.0
-        self.last_balloon_earned = 0.0
+    // Initialize session colors and trial sequence
+    function initSession() {
+      // Pick 3 distinct random colors
+      const chosenColors = shuffle([...COLOR_PALETTE]).slice(0, 3);
+      CATEGORY_DEFINITIONS.forEach((cat, idx) => {
+        cat.color = chosenColors[idx].hex;
+        cat.color_name = chosenColors[idx].name;
+        cat.textDark = chosenColors[idx].textDark;
+      });
 
-        # Aggregate stats storage per category
-        self.stats = {
-            128: {"pumps": [], "popped_pumps": [], "collected_pumps": [], "pops": 0, "collected": 0},
-            64: {"pumps": [], "popped_pumps": [], "collected_pumps": [], "pops": 0, "collected": 0},
-            32: {"pumps": [], "popped_pumps": [], "collected_pumps": [], "pops": 0, "collected": 0}
+      // Build 90 trials (30 per category)
+      let trials = [];
+      CATEGORY_DEFINITIONS.forEach(cat => {
+        for (let i = 0; i < 30; i++) {
+          trials.push({ ...cat });
         }
-
-        # Current trial variables
-        self.current_cat = None
-        self.max_pumps = 0
-        self.explosion_point = 0
-        self.current_pumps = 0
-        self.current_bank = 0.0
-
-        # Show Instruction Page first
-        self.show_instructions_screen()
-
-    def assign_distinct_random_colors(self):
-        """Pick 3 distinct colors from a predefined high-contrast color palette."""
-        color_palette = [
-            ("#1e88e5", "Blue"),
-            ("#e53935", "Red"),
-            ("#fdd835", "Yellow"),
-            ("#8e24aa", "Purple"),
-            ("#fb8c00", "Orange"),
-            ("#00acc1", "Cyan"),
-            ("#d81b60", "Pink")
-        ]
-        chosen_colors = random.sample(color_palette, 3)
-
-        for i, cat in enumerate(self.category_definitions):
-            cat["color"] = chosen_colors[i][0]
-            cat["color_name"] = chosen_colors[i][1]
-
-    def show_instructions_screen(self):
-        for widget in self.root.winfo_children():
-            widget.destroy()
-
-        inst_frame = tk.Frame(self.root, bg="#f4f4f9", padx=30, pady=20)
-        inst_frame.pack(fill=tk.BOTH, expand=True)
-
-        tk.Label(inst_frame, text="Welcome to the Balloon Analog Risk Task (BART)", font=("Arial", 18, "bold"),
-                 bg="#f4f4f9", fg="#222").pack(pady=10)
-
-        instructions_text = (
-            "In this task, you will be presented with a series of 90 balloon trials.\n\n"
-            "• **Pump Up Balloon**: Each pump earns you 0.05 points into your temporary bank.\n"
-            "  - *Keyboard shortcuts*: Press **Space**, **Enter**, or **5** (Keypad)\n"
-            "• **Collect / Claim Points**: Click collect before the balloon pops to transfer your temporary earnings to your Total Bank.\n"
-            "  - *Keyboard shortcuts*: Press **C**, **V**, or **9** (Keypad)\n"
-            "• **The Risk**: Each balloon has a hidden explosion point.\n"
-            "  If the balloon pops, you lose the money accumulated in that trial.\n\n"
-            "Color Mapping for this session:\n"
-        )
-
-        tk.Label(inst_frame, text=instructions_text, font=("Arial", 11), bg="#f4f4f9", justify=tk.LEFT).pack(anchor="w",
-                                                                                                             pady=5)
-
-        tk.Label(inst_frame, text="\nWhen you are ready, click 'Start Task' below to begin.",
-                 font=("Arial", 11, "italic"), bg="#f4f4f9", fg="#555").pack(anchor="w", pady=10)
-
-        btn_start = tk.Button(inst_frame, text="Start Task", font=("Arial", 12, "bold"), bg="#4CAF50", fg="white",
-                              padx=20, pady=8, command=self.build_game_ui_and_start)
-        btn_start.pack(pady=20)
-
-    def build_game_ui_and_start(self):
-        for widget in self.root.winfo_children():
-            widget.destroy()
-
-        header_frame = tk.Frame(self.root, bg="#f4f4f9")
-        header_frame.pack(fill=tk.X, pady=10)
-
-        self.title_label = tk.Label(header_frame, text="Balloon Analog Risk Task", font=("Arial", 20, "bold"),
-                                    bg="#f4f4f9", fg="#333")
-        self.title_label.pack()
-
-        self.progress_label = tk.Label(header_frame, text="", font=("Arial", 12), bg="#f4f4f9", fg="#666")
-        self.progress_label.pack()
-
-        self.game_frame = tk.Frame(self.root, bg="#f4f4f9")
-        self.game_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
-
-        left_panel = tk.Frame(self.game_frame, bg="#f4f4f9")
-        left_panel.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
-
-        self.canvas = tk.Canvas(left_panel, width=400, height=350, bg="white", highlightthickness=1,
-                                highlightbackground="#ccc")
-        self.canvas.pack(pady=10)
-
-        btn_frame = tk.Frame(left_panel, bg="#f4f4f9")
-        btn_frame.pack(pady=10)
-
-        self.btn_pump = tk.Button(btn_frame, text="Pump Up Balloon (Space/Enter/5)", font=("Arial", 11, "bold"),
-                                  bg="#4CAF50", fg="white", padx=10, pady=8, command=self.pump_balloon)
-        self.btn_pump.grid(row=0, column=0, padx=10)
-
-        self.btn_collect = tk.Button(btn_frame, text="Collect Points (C/V/9)", font=("Arial", 11, "bold"), bg="#2196F3",
-                                     fg="white", padx=10, pady=8, command=self.collect_money)
-        self.btn_collect.grid(row=0, column=1, padx=10)
-
-        right_panel = tk.Frame(self.game_frame, bg="#e8e8ef", padx=15, pady=15, relief=tk.RIDGE, bd=2)
-        right_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=20)
-
-        tk.Label(right_panel, text="Scoreboard", font=("Arial", 14, "bold"), bg="#e8e8ef", fg="#333").pack(anchor="w",
-                                                                                                           pady=5)
-
-        self.lbl_temp_earned = tk.Label(right_panel, text="Current Earned: 0.00 Points", font=("Arial", 11), bg="#e8e8ef",
-                                        anchor="w")
-        self.lbl_temp_earned.pack(anchor="w", pady=5)
-
-        self.lbl_last_balloon = tk.Label(right_panel, text="Last Balloon: 0.00 Points", font=("Arial", 11), bg="#e8e8ef",
-                                         anchor="w")
-        self.lbl_last_balloon.pack(anchor="w", pady=5)
-
-        tk.Label(right_panel, text="", bg="#e8e8ef").pack(pady=10)
-
-        self.lbl_total_earned = tk.Label(right_panel, text="Total Earned: 0.00 Points", font=("Arial", 12, "bold"),
-                                         bg="#e8e8ef", fg="#2e7d32", anchor="w")
-        self.lbl_total_earned.pack(anchor="w", pady=5)
-
-        self.lbl_category_info = tk.Label(right_panel, text="", font=("Arial", 10, "italic"), bg="#e8e8ef", fg="#555",
-                                          justify=tk.LEFT)
-        self.lbl_category_info.pack(anchor="w", pady=15)
-
-        # Bind keyboard shortcuts
-        self.root.bind("<space>", lambda event: self.pump_balloon())
-        self.root.bind("<Return>", lambda event: self.pump_balloon())
-        self.root.bind("5", lambda event: self.pump_balloon())
-        self.root.bind("<KP_5>", lambda event: self.pump_balloon())
-
-        self.root.bind("c", lambda event: self.collect_money())
-        self.root.bind("C", lambda event: self.collect_money())
-        self.root.bind("v", lambda event: self.collect_money())
-        self.root.bind("V", lambda event: self.collect_money())
-        self.root.bind("9", lambda event: self.collect_money())
-        self.root.bind("<KP_9>", lambda event: self.collect_money())
-
-        self.load_next_trial()
-
-    def load_next_trial(self):
-        if self.current_trial_idx >= self.total_trials:
-            self.show_results_screen()
-            return
-
-        self.current_cat = self.trials[self.current_trial_idx]
-        self.max_pumps = self.current_cat["max_pumps"]
-        self.explosion_point = random.randint(1, self.max_pumps)
-        self.current_pumps = 0
-        self.current_bank = 0.0
-
-        self.progress_label.config(text=f"Trial {self.current_trial_idx + 1} of {self.total_trials}")
-        self.lbl_temp_earned.config(text="Current Points: 0.00")
-        self.lbl_last_balloon.config(text=f"Last Balloon Points: {self.last_balloon_earned:.2f}")
-        self.lbl_total_earned.config(text=f"Total Points: {self.total_earned:.2f}")
-
-        self.btn_pump.config(state=tk.NORMAL)
-        self.btn_collect.config(state=tk.NORMAL)
-
-        self.draw_balloon()
-
-    def draw_balloon(self):
-        self.canvas.delete("all")
-        base_radius = 30
-        radius = base_radius + int(self.current_pumps * 1.4)
-
-        center_x = 200
-        center_y = 175
-        color = self.current_cat["color"]
-
-        self.canvas.create_line(center_x, center_y + radius, center_x, center_y + radius + 80, fill="#666", width=2)
-        self.canvas.create_oval(center_x - radius, center_y - radius, center_x + radius, center_y + radius, fill=color,
-                                outline="#333", width=2)
-        self.canvas.create_polygon(center_x - 5, center_y + radius, center_x + 5, center_y + radius, center_x,
-                                   center_y + radius + 10, fill=color, outline="#333")
-
-    def pump_balloon(self):
-        # Ignore keypresses if buttons are disabled (e.g. during POP delay)
-        if str(self.btn_pump['state']) == tk.DISABLED:
-            return
-
-        self.current_pumps += 1
-        self.current_bank = self.current_pumps * 0.05
-        self.lbl_temp_earned.config(text=f"Current Points: {self.current_bank:.2f}")
-        self.draw_balloon()
-
-        if self.current_pumps >= self.explosion_point:
-            self.handle_explosion()
-
-    def handle_explosion(self):
-        cat_key = self.max_pumps
-        self.stats[cat_key]["pumps"].append(self.current_pumps)
-        self.stats[cat_key]["popped_pumps"].append(self.current_pumps)
-        self.stats[cat_key]["pops"] += 1
-
-        self.last_balloon_earned = 0.0
-        self.canvas.delete("all")
-        self.canvas.create_text(200, 175, text="POP!", font=("Arial", 32, "bold"), fill="red")
-
-        self.btn_pump.config(state=tk.DISABLED)
-        self.btn_collect.config(state=tk.DISABLED)
-
-        self.root.after(800, self.advance_trial)
-
-    def collect_money(self):
-        if str(self.btn_collect['state']) == tk.DISABLED:
-            return
-
-        if self.current_pumps == 0:
-            messagebox.showwarning("Notice", "You must pump the balloon at least once before collecting!")
-            return
-
-        cat_key = self.max_pumps
-        self.stats[cat_key]["pumps"].append(self.current_pumps)
-        self.stats[cat_key]["collected_pumps"].append(self.current_pumps)
-        self.stats[cat_key]["collected"] += 1
-
-        self.total_earned += self.current_bank
-        self.last_balloon_earned = self.current_bank
-
-        self.btn_pump.config(state=tk.DISABLED)
-        self.btn_collect.config(state=tk.DISABLED)
-
-        self.advance_trial()
-
-    def advance_trial(self):
-        self.current_trial_idx += 1
-        self.load_next_trial()
-
-    def show_results_screen(self):
-        # Unbind keyboard shortcuts on results screen
-        self.root.unbind("<space>")
-        self.root.unbind("<Return>")
-        self.root.unbind("5")
-        self.root.unbind("<KP_5>")
-        self.root.unbind("c")
-        self.root.unbind("C")
-        self.root.unbind("v")
-        self.root.unbind("V")
-        self.root.unbind("9")
-        self.root.unbind("<KP_9>")
-
-        for widget in self.root.winfo_children():
-            widget.destroy()
-
-        results_frame = tk.Frame(self.root, bg="#f4f4f9", padx=20, pady=15)
-        results_frame.pack(fill=tk.BOTH, expand=True)
-
-        tk.Label(results_frame, text="Experiment Complete - Results Dashboard", font=("Arial", 16, "bold"),
-                 bg="#f4f4f9", fg="#222").pack(pady=2)
-        tk.Label(results_frame, text=f"Total Points Earned: {self.total_earned:.2f}", font=("Arial", 13, "bold"),
-                 bg="#f4f4f9", fg="#2e7d32").pack(pady=2)
-
-        # Aggregate Statistics
-        all_pumps = []
-        total_pops = 0
-        total_collected = 0
-        for k in self.stats:
-            all_pumps.extend(self.stats[k]["pumps"])
-            total_pops += self.stats[k]["pops"]
-            total_collected += self.stats[k]["collected"]
-
-        avg_pumps_overall = sum(all_pumps) / len(all_pumps) if all_pumps else 0
-        max_pumps_overall = max(all_pumps) if all_pumps else 0
-        min_blow_ups = min([len(self.stats[k]["popped_pumps"]) for k in self.stats])
-
-        summary_text = (
-            f"• Average Number of Pumps (Overall): {avg_pumps_overall:.2f}  |  "
-            f"• Average Balloons Collected: {total_collected} / {self.total_trials}\n"
-            f"• Highest Pump Count: {max_pumps_overall}  |  "
-            f"• Lowest Blow Ups (Category Min Pops): {min_blow_ups}"
-        )
-
-        tk.Label(results_frame, text=summary_text, font=("Arial", 10), bg="#e8e8ef", justify=tk.LEFT, padx=10, pady=5,
-                 relief=tk.SOLID, bd=1).pack(fill=tk.X, pady=5)
-
-        # User Performance Table
-        tk.Label(results_frame, text="Your Performance Breakdown:", font=("Arial", 11, "bold"), bg="#f4f4f9",
-                 fg="#333").pack(anchor="w", pady=(5, 2))
-
-        table_frame = tk.Frame(results_frame, bg="white", relief=tk.RIDGE, bd=2)
-        table_frame.pack(fill=tk.X, pady=2)
-
-        headers = ["Risk Level", "Assigned Color", "Pops / Collected", "Avg Popped Pump", "Avg Collected Pump"]
-        for col_idx, header in enumerate(headers):
-            lbl = tk.Label(table_frame, text=header, font=("Arial", 9, "bold"), bg="#ddd", padx=5, pady=4,
-                           borderwidth=1, relief="solid")
-            lbl.grid(row=0, column=col_idx, sticky="nsew")
-
-        row_items = [(128, "1/128 Risk"), (64, "1/64 Risk"), (32, "1/32 Risk")]
-
-        for idx, (max_p, risk_lbl) in enumerate(row_items, start=1):
-            cat_data = self.stats[max_p]
-            cat_def = next(c for c in self.category_definitions if c["max_pumps"] == max_p)
-            color_hex = cat_def["color"]
-            color_name = cat_def["color_name"]
-
-            popped_avg = sum(cat_data["popped_pumps"]) / len(cat_data["popped_pumps"]) if cat_data[
-                "popped_pumps"] else 0.0
-            collected_avg = sum(cat_data["collected_pumps"]) / len(cat_data["collected_pumps"]) if cat_data[
-                "collected_pumps"] else 0.0
-
-            row_values = [
-                risk_lbl,
-                f"{color_name} ({color_hex})",
-                f"{cat_data['pops']} pops / {cat_data['collected']} collected",
-                f"{popped_avg:.2f}",
-                f"{collected_avg:.2f}"
-            ]
-
-            for col_idx, val in enumerate(row_values):
-                bg_c = color_hex if col_idx == 1 else "white"
-                fg_c = "white" if col_idx == 1 and color_name in ["Blue", "Red", "Purple", "Pink"] else "black"
-                lbl = tk.Label(table_frame, text=val, font=("Arial", 9), bg=bg_c, fg=fg_c, padx=5, pady=4,
-                               borderwidth=1, relief="solid")
-                lbl.grid(row=idx, column=col_idx, sticky="nsew")
-
-        for c in range(len(headers)):
-            table_frame.grid_columnconfigure(c, weight=1)
-
-        # Reference Norms Comparison Table
-        tk.Label(results_frame, text="Normative Comparison (Lejuez et al., 2002 Table 1 Norms):",
-                 font=("Arial", 11, "bold"), bg="#f4f4f9", fg="#333").pack(anchor="w", pady=(10, 2))
-
-        norm_frame = tk.Frame(results_frame, bg="white", relief=tk.RIDGE, bd=2)
-        norm_frame.pack(fill=tk.X, pady=2)
-
-        norm_headers = ["Norm Category", "Total Avg Pumps (M ± SD)", "Adjusted Avg Pumps (M ± SD)",
-                        "Explosions (M ± SD)"]
-        for col_idx, header in enumerate(norm_headers):
-            lbl = tk.Label(norm_frame, text=header, font=("Arial", 9, "bold"), bg="#cfd8dc", padx=5, pady=4,
-                           borderwidth=1, relief="solid")
-            lbl.grid(row=0, column=col_idx, sticky="nsew")
-
-        norm_rows = [
-            ("Blue (1-128) - Men", "30.5 ± 10.1", "33.3 ± 13.2", "9.1 ± 4.5"),
-            ("Blue (1-128) - Women", "25.0 ± 9.6", "25.5 ± 11.5", "7.6 ± 4.5"),
-            ("Yellow (1-32) - Men", "11.1 ± 2.6", "12.3 ± 3.8", "16.5 ± 5.1"),
-            ("Yellow (1-32) - Women", "10.3 ± 2.5", "11.4 ± 3.8", "15.0 ± 4.5"),
-            ("Orange (1-8) - Men", "3.6 ± 0.6", "3.5 ± 1.1", "22.2 ± 4.5"),
-            ("Orange (1-8) - Women", "3.6 ± 0.6", "3.5 ± 1.0", "21.7 ± 4.0")
-        ]
-
-        for idx, row in enumerate(norm_rows, start=1):
-            for col_idx, val in enumerate(row):
-                lbl = tk.Label(norm_frame, text=val, font=("Arial", 8), bg="white", padx=5, pady=3, borderwidth=1,
-                               relief="solid")
-                lbl.grid(row=idx, column=col_idx, sticky="nsew")
-
-        for c in range(len(norm_headers)):
-            norm_frame.grid_columnconfigure(c, weight=1)
-
-        # Citation Section
-        citation_text = (
-            "Citation:\n"
-            "Lejuez, C. W., Read, J. P., Kahler, C. W., Richards, J. B., Ramsey, S. E., Stuart, G. L., "
-            "Strong, D. R., & Brown, R. A. (2002). Evaluation of a behavioral measure of risk taking: "
-            "the Balloon Analogue Risk Task (BART). Journal of experimental psychology. Applied, 8(2), 75–84. "
-            "https://doi.org/10.1037//1076-898x.8.2.75[cite: 4]"
-        )
-
-        lbl_citation = tk.Label(results_frame, text=citation_text, font=("Arial", 8, "italic"), bg="#f4f4f9", fg="#555",
-                                justify=tk.LEFT, wraplength=850)
-        lbl_citation.pack(anchor="w", pady=(10, 5))
-
-        btn_close = tk.Button(results_frame, text="Exit Application", font=("Arial", 10, "bold"), bg="#d9534f",
-                              fg="white", command=self.root.destroy, padx=10, pady=4)
-        btn_close.pack(pady=5)
-
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = BARTApp(root)
-    root.mainloop()
+      });
+      state.trials = shuffle(trials);
+      state.totalTrials = state.trials.length;
+      state.currentTrialIdx = 0;
+      state.totalEarned = 0.0;
+      state.lastBalloonEarned = 0.0;
+      state.stats = {
+        128: { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
+        64:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
+        32:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 }
+      };
+
+      showInstructionsScreen();
+    }
+
+    // --- Screen 1: Instructions ---
+    function showInstructionsScreen() {
+      app.innerHTML = `
+        <div class="p-6 sm:p-10 flex flex-col justify-between h-full">
+          <div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">
+              Welcome to the Balloon Analog Risk Task (BART)
+            </h1>
+            
+            <div class="space-y-4 text-sm sm:text-base text-gray-700 leading-relaxed bg-gray-50 p-5 rounded-lg border border-gray-200">
+              <p>In this task, you will be presented with a series of <strong>90 balloon trials</strong>.</p>
+              
+              <ul class="list-disc pl-5 space-y-2">
+                <li>
+                  <strong>Pump Up Balloon</strong>: Each pump earns you <strong>0.05 points</strong> into your temporary bank.<br>
+                  <span class="text-xs sm:text-sm text-gray-500">Touch/Click button or press <strong>Space</strong>, <strong>Enter</strong>, or <strong>5</strong>.</span>
+                </li>
+                <li>
+                  <strong>Collect Points</strong>: Click collect before the balloon pops to transfer your temporary earnings to your Total Bank.<br>
+                  <span class="text-xs sm:text-sm text-gray-500">Touch/Click button or press <strong>C</strong>, <strong>V</strong>, or <strong>9</strong>.</span>
+                </li>
+                <li>
+                  <strong>The Risk</strong>: Each balloon has a hidden explosion point. If the balloon pops, you lose the points accumulated in that trial.
+                </li>
+              </ul>
+            </div>
+
+            <p class="mt-6 text-sm italic text-gray-600 text-center">
+              When you are ready, tap 'Start Task' below to begin.
+            </p>
+          </div>
+
+          <div class="mt-8 text-center">
+            <button id="btn-start" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-10 rounded-lg text-lg shadow-md transition-all active:scale-95">
+              Start Task
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('btn-start').addEventListener('click', buildGameUIAndStart);
+    }
+
+    // --- Screen 2: Main Task Interface ---
+    function buildGameUIAndStart() {
+      app.innerHTML = `
+        <div class="p-4 sm:p-6 flex flex-col h-full">
+          <!-- Header -->
+          <div class="text-center mb-4">
+            <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Balloon Analog Risk Task</h2>
+            <div id="progress-label" class="text-xs sm:text-sm text-gray-500 font-medium mt-1">Trial 1 of 90</div>
+          </div>
+
+          <!-- Main Layout -->
+          <div class="flex flex-col lg:flex-row gap-6 items-stretch justify-center flex-grow">
+            <!-- Left Canvas & Controls Area -->
+            <div class="flex-1 flex flex-col items-center justify-center bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <div class="relative w-full max-w-[360px] aspect-square flex items-center justify-center bg-white rounded-lg border border-gray-300 shadow-inner overflow-hidden mb-4">
+                <canvas id="balloonCanvas" width="360" height="320" class="w-full h-full"></canvas>
+              </div>
+
+              <!-- Control Buttons -->
+              <div class="grid grid-cols-2 gap-3 w-full max-w-[360px]">
+                <button id="btn-pump" class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold py-3.5 px-2 rounded-lg text-sm sm:text-base shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                  Pump Balloon<br><span class="text-[10px] sm:text-xs opacity-80">(Space / 5)</span>
+                </button>
+                <button id="btn-collect" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 px-2 rounded-lg text-sm sm:text-base shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                  Collect Points<br><span class="text-[10px] sm:text-xs opacity-80">(C / V / 9)</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Right Scoreboard -->
+            <div class="w-full lg:w-72 bg-[#e8e8ef] p-5 rounded-xl border-2 border-gray-300 flex flex-col justify-between">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800 border-b border-gray-300 pb-2 mb-4">Scoreboard</h3>
+                <div class="space-y-3">
+                  <div>
+                    <span class="text-xs text-gray-500 uppercase tracking-wider block">Current Trial</span>
+                    <span id="lbl-temp-earned" class="text-lg font-semibold text-gray-800">0.00 Points</span>
+                  </div>
+                  <div>
+                    <span class="text-xs text-gray-500 uppercase tracking-wider block">Last Balloon</span>
+                    <span id="lbl-last-balloon" class="text-base font-medium text-gray-700">0.00 Points</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-6 pt-4 border-t border-gray-300">
+                <span class="text-xs text-gray-500 uppercase tracking-wider block">Total Bank</span>
+                <span id="lbl-total-earned" class="text-2xl font-extrabold text-green-700">0.00 Points</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Event Listeners
+      document.getElementById('btn-pump').addEventListener('click', pumpBalloon);
+      document.getElementById('btn-collect').addEventListener('click', collectMoney);
+      window.addEventListener('keydown', handleKeypress);
+
+      loadNextTrial();
+    }
+
+    function handleKeypress(e) {
+      if (state.currentTrialIdx >= state.totalTrials || state.isPopping) return;
+
+      const key = e.key.toLowerCase();
+      if ([' ', 'enter', '5'].includes(key)) {
+        e.preventDefault();
+        pumpBalloon();
+      } else if (['c', 'v', '9'].includes(key)) {
+        e.preventDefault();
+        collectMoney();
+      }
+    }
+
+    function loadNextTrial() {
+      if (state.currentTrialIdx >= state.totalTrials) {
+        showResultsScreen();
+        return;
+      }
+
+      state.isPopping = false;
+      state.currentCat = state.trials[state.currentTrialIdx];
+      state.maxPumps = state.currentCat.max_pumps;
+      state.explosionPoint = Math.floor(Math.random() * state.maxPumps) + 1;
+      state.currentPumps = 0;
+      state.currentBank = 0.0;
+
+      document.getElementById('progress-label').innerText = `Trial ${state.currentTrialIdx + 1} of ${state.totalTrials}`;
+      document.getElementById('lbl-temp-earned').innerText = `0.00 Points`;
+      document.getElementById('lbl-last-balloon').innerText = `${state.lastBalloonEarned.toFixed(2)} Points`;
+      document.getElementById('lbl-total-earned').innerText = `${state.totalEarned.toFixed(2)} Points`;
+
+      setButtonsState(true);
+      drawBalloon();
+    }
+
+    function drawBalloon() {
+      const canvas = document.getElementById('balloonCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const baseRadius = 30;
+      const radius = baseRadius + Math.floor(state.currentPumps * 1.4);
+      const centerX = canvas.width / 2;
+      const centerY = 140;
+      const color = state.currentCat.color;
+
+      // Draw String
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY + radius);
+      ctx.lineTo(centerX, centerY + radius + 70);
+      ctx.strokeStyle = "#666666";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw Oval Balloon
+      ctx.beginPath();
+      ctx.ellipse(centerX, centerY, radius, radius * 1.1, 0, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = "#333333";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw Balloon Knot
+      ctx.beginPath();
+      ctx.moveTo(centerX - 6, centerY + (radius * 1.1));
+      ctx.lineTo(centerX + 6, centerY + (radius * 1.1));
+      ctx.lineTo(centerX, centerY + (radius * 1.1) + 8);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    function pumpBalloon() {
+      if (state.isPopping || state.currentTrialIdx >= state.totalTrials) return;
+
+      state.currentPumps++;
+      state.currentBank = state.currentPumps * 0.05;
+      document.getElementById('lbl-temp-earned').innerText = `${state.currentBank.toFixed(2)} Points`;
+      drawBalloon();
+
+      if (state.currentPumps >= state.explosionPoint) {
+        handleExplosion();
+      }
+    }
+
+    function handleExplosion() {
+      state.isPopping = true;
+      const catKey = state.maxPumps;
+      state.stats[catKey].pumps.push(state.currentPumps);
+      state.stats[catKey].popped_pumps.push(state.currentPumps);
+      state.stats[catKey].pops++;
+
+      state.lastBalloonEarned = 0.0;
+      setButtonsState(false);
+
+      // Draw POP Text
+      const canvas = document.getElementById('balloonCanvas');
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = "bold 36px Arial";
+      ctx.fillStyle = "#e53935";
+      ctx.textAlign = "center";
+      ctx.fillText("POP!", canvas.width / 2, canvas.height / 2);
+
+      setTimeout(advanceTrial, 800);
+    }
+
+    function collectMoney() {
+      if (state.isPopping || state.currentTrialIdx >= state.totalTrials) return;
+
+      if (state.currentPumps === 0) {
+        alert("You must pump the balloon at least once before collecting!");
+        return;
+      }
+
+      const catKey = state.maxPumps;
+      state.stats[catKey].pumps.push(state.currentPumps);
+      state.stats[catKey].collected_pumps.push(state.currentPumps);
+      state.stats[catKey].collected++;
+
+      state.totalEarned += state.currentBank;
+      state.lastBalloonEarned = state.currentBank;
+
+      setButtonsState(false);
+      advanceTrial();
+    }
+
+    function setButtonsState(enabled) {
+      document.getElementById('btn-pump').disabled = !enabled;
+      document.getElementById('btn-collect').disabled = !enabled;
+    }
+
+    function advanceTrial() {
+      state.currentTrialIdx++;
+      loadNextTrial();
+    }
+
+    // --- Screen 3: Results Dashboard ---
+    function showResultsScreen() {
+      window.removeEventListener('keydown', handleKeypress);
+
+      let allPumps = [];
+      let totalPops = 0;
+      let totalCollected = 0;
+
+      Object.keys(state.stats).forEach(k => {
+        allPumps.push(...state.stats[k].pumps);
+        totalPops += state.stats[k].pops;
+        totalCollected += state.stats[k].collected;
+      });
+
+      const avgPumpsOverall = allPumps.length > 0 ? (allPumps.reduce((a, b) => a + b, 0) / allPumps.length) : 0;
+      const maxPumpsOverall = allPumps.length > 0 ? Math.max(...allPumps) : 0;
+      const minBlowUps = Math.min(...Object.keys(state.stats).map(k => state.stats[k].popped_pumps.length));
+
+      app.innerHTML = `
+        <div class="p-4 sm:p-6 overflow-y-auto max-h-[90vh]">
+          <h2 class="text-xl sm:text-2xl font-bold text-center text-gray-800 mb-1">
+            Experiment Complete - Results Dashboard
+          </h2>
+          <p class="text-center text-lg font-bold text-green-700 mb-4">
+            Total Points Earned: ${state.totalEarned.toFixed(2)}
+          </p>
+
+          <!-- Aggregate Stats Banner -->
+          <div class="bg-gray-100 border border-gray-300 rounded-lg p-3 sm:p-4 text-xs sm:text-sm text-gray-700 mb-5 leading-relaxed">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>• <strong>Average Pumps (Overall):</strong> ${avgPumpsOverall.toFixed(2)}</div>
+              <div>• <strong>Balloons Collected:</strong> ${totalCollected} / ${state.totalTrials}</div>
+              <div>• <strong>Highest Pump Count:</strong> ${maxPumpsOverall}</div>
+              <div>• <strong>Min Pops (Category Low):</strong> ${minBlowUps}</div>
+            </div>
+          </div>
+
+          <!-- Performance Breakdown Table -->
+          <h3 class="text-sm font-bold text-gray-800 mb-2">Your Performance Breakdown:</h3>
+          <div class="overflow-x-auto mb-6">
+            <table class="w-full text-xs sm:text-sm border-collapse border border-gray-300 text-center">
+              <thead>
+                <tr class="bg-gray-200 text-gray-800">
+                  <th class="border border-gray-300 p-2">Risk Level</th>
+                  <th class="border border-gray-300 p-2">Assigned Color</th>
+                  <th class="border border-gray-300 p-2">Pops / Collected</th>
+                  <th class="border border-gray-300 p-2">Avg Popped Pump</th>
+                  <th class="border border-gray-300 p-2">Avg Collected Pump</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${[128, 64, 32].map(maxP => {
+                  const catData = state.stats[maxP];
+                  const catDef = CATEGORY_DEFINITIONS.find(c => c.max_pumps === maxP);
+                  const poppedAvg = catData.popped_pumps.length ? (catData.popped_pumps.reduce((a,b)=>a+b,0)/catData.popped_pumps.length).toFixed(2) : "0.00";
+                  const collectedAvg = catData.collected_pumps.length ? (catData.collected_pumps.reduce((a,b)=>a+b,0)/catData.collected_pumps.length).toFixed(2) : "0.00";
+                  const textColor = catDef.textDark ? "text-gray-900" : "text-white";
+
+                  return `
+                    <tr class="hover:bg-gray-50">
+                      <td class="border border-gray-300 p-2 font-medium">1/${maxP} Risk</td>
+                      <td class="border border-gray-300 p-2 font-semibold ${textColor}" style="background-color: ${catDef.color}">
+                        ${catDef.color_name} (${catDef.color})
+                      </td>
+                      <td class="border border-gray-300 p-2">${catData.pops} pops / ${catData.collected} collected</td>
+                      <td class="border border-gray-300 p-2">${poppedAvg}</td>
+                      <td class="border border-gray-300 p-2">${collectedAvg}</td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Normative Comparison Table -->
+          <h3 class="text-sm font-bold text-gray-800 mb-2">Normative Comparison (Lejuez et al., 2002 Table 1 Norms):</h3>
+          <div class="overflow-x-auto mb-4">
+            <table class="w-full text-[11px] sm:text-xs border-collapse border border-gray-300 text-center">
+              <thead>
+                <tr class="bg-blue-100 text-gray-800">
+                  <th class="border border-gray-300 p-1.5">Norm Category</th>
+                  <th class="border border-gray-300 p-1.5">Total Avg Pumps (M ± SD)</th>
+                  <th class="border border-gray-300 p-1.5">Adjusted Avg Pumps (M ± SD)</th>
+                  <th class="border border-gray-300 p-1.5">Explosions (M ± SD)</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white">
+                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Blue (1-128) - Men</td><td class="border border-gray-300 p-1.5">30.5 ± 10.1</td><td class="border border-gray-300 p-1.5">33.3 ± 13.2</td><td class="border border-gray-300 p-1.5">9.1 ± 4.5</td></tr>
+                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Blue (1-128) - Women</td><td class="border border-gray-300 p-1.5">25.0 ± 9.6</td><td class="border border-gray-300 p-1.5">25.5 ± 11.5</td><td class="border border-gray-300 p-1.5">7.6 ± 4.5</td></tr>
+                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Yellow (1-32) - Men</td><td class="border border-gray-300 p-1.5">11.1 ± 2.6</td><td class="border border-gray-300 p-1.5">12.3 ± 3.8</td><td class="border border-gray-300 p-1.5">16.5 ± 5.1</td></tr>
+                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Yellow (1-32) - Women</td><td class="border border-gray-300 p-1.5">10.3 ± 2.5</td><td class="border border-gray-300 p-1.5">11.4 ± 3.8</td><td class="border border-gray-300 p-1.5">15.0 ± 4.5</td></tr>
+                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Orange (1-8) - Men</td><td class="border border-gray-300 p-1.5">3.6 ± 0.6</td><td class="border border-gray-300 p-1.5">3.5 ± 1.1</td><td class="border border-gray-300 p-1.5">22.2 ± 4.5</td></tr>
+                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Orange (1-8) - Women</td><td class="border border-gray-300 p-1.5">3.6 ± 0.6</td><td class="border border-gray-300 p-1.5">3.5 ± 1.0</td><td class="border border-gray-300 p-1.5">21.7 ± 4.0</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Citation -->
+          <p class="text-[10px] sm:text-xs text-gray-500 italic mb-6 leading-tight">
+            <strong>Citation:</strong> Lejuez, C. W., Read, J. P., Kahler, C. W., Richards, J. B., Ramsey, S. E., Stuart, G. L., Strong, D. R., & Brown, R. A. (2002). Evaluation of a behavioral measure of risk taking: the Balloon Analogue Risk Task (BART). <em>Journal of Experimental Psychology: Applied</em>, 8(2), 75–84. https://doi.org/10.1037//1076-898x.8.2.75
+          </p>
+
+          <div class="text-center">
+            <button id="btn-restart" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-lg text-sm shadow-md transition-all active:scale-95">
+              Restart Task
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('btn-restart').addEventListener('click', initSession);
+    }
+
+    // Launch Application on Load
+    window.addEventListener('DOMContentLoaded', initSession);
+  </script>
+</body>
+</html>
