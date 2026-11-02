@@ -1,0 +1,409 @@
+import random
+import tkinter as tk
+from tkinter import messagebox
+
+
+class BARTApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Balloon Analog Risk Task (BART)")
+        self.root.geometry("900x750")
+        self.root.configure(bg="#f4f4f9")
+
+        # Define categories: (Max Pumps, Risk Description)
+        self.category_definitions = [
+            {"max_pumps": 128, },
+            {"max_pumps": 64,},
+            {"max_pumps": 32,}
+        ]
+
+        # Assign distinct random colors for this session
+        self.assign_distinct_random_colors()
+
+        # Build 90 trials (30 of each category, shuffled)
+        self.trials = []
+        for cat in self.category_definitions:
+            for _ in range(30):
+                self.trials.append(cat)
+        random.shuffle(self.trials)
+
+        self.total_trials = len(self.trials)
+        self.current_trial_idx = 0
+
+        # Tracking metrics
+        self.total_earned = 0.0
+        self.last_balloon_earned = 0.0
+
+        # Aggregate stats storage per category
+        self.stats = {
+            128: {"pumps": [], "popped_pumps": [], "collected_pumps": [], "pops": 0, "collected": 0},
+            64: {"pumps": [], "popped_pumps": [], "collected_pumps": [], "pops": 0, "collected": 0},
+            32: {"pumps": [], "popped_pumps": [], "collected_pumps": [], "pops": 0, "collected": 0}
+        }
+
+        # Current trial variables
+        self.current_cat = None
+        self.max_pumps = 0
+        self.explosion_point = 0
+        self.current_pumps = 0
+        self.current_bank = 0.0
+
+        # Show Instruction Page first
+        self.show_instructions_screen()
+
+    def assign_distinct_random_colors(self):
+        """Pick 3 distinct colors from a predefined high-contrast color palette."""
+        color_palette = [
+            ("#1e88e5", "Blue"),
+            ("#e53935", "Red"),
+            ("#fdd835", "Yellow"),
+            ("#8e24aa", "Purple"),
+            ("#fb8c00", "Orange"),
+            ("#00acc1", "Cyan"),
+            ("#d81b60", "Pink")
+        ]
+        chosen_colors = random.sample(color_palette, 3)
+
+        for i, cat in enumerate(self.category_definitions):
+            cat["color"] = chosen_colors[i][0]
+            cat["color_name"] = chosen_colors[i][1]
+
+    def show_instructions_screen(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        inst_frame = tk.Frame(self.root, bg="#f4f4f9", padx=30, pady=20)
+        inst_frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(inst_frame, text="Welcome to the Balloon Analog Risk Task (BART)", font=("Arial", 18, "bold"),
+                 bg="#f4f4f9", fg="#222").pack(pady=10)
+
+        instructions_text = (
+            "In this task, you will be presented with a series of 90 balloon trials.\n\n"
+            "• **Pump Up Balloon**: Each pump earns you 0.05 points into your temporary bank.\n"
+            "  - *Keyboard shortcuts*: Press **Space**, **Enter**, or **5** (Keypad)\n"
+            "• **Collect / Claim Points**: Click collect before the balloon pops to transfer your temporary earnings to your Total Bank.\n"
+            "  - *Keyboard shortcuts*: Press **C**, **V**, or **9** (Keypad)\n"
+            "• **The Risk**: Each balloon has a hidden explosion point.\n"
+            "  If the balloon pops, you lose the money accumulated in that trial.\n\n"
+            "Color Mapping for this session:\n"
+        )
+
+        tk.Label(inst_frame, text=instructions_text, font=("Arial", 11), bg="#f4f4f9", justify=tk.LEFT).pack(anchor="w",
+                                                                                                             pady=5)
+
+        tk.Label(inst_frame, text="\nWhen you are ready, click 'Start Task' below to begin.",
+                 font=("Arial", 11, "italic"), bg="#f4f4f9", fg="#555").pack(anchor="w", pady=10)
+
+        btn_start = tk.Button(inst_frame, text="Start Task", font=("Arial", 12, "bold"), bg="#4CAF50", fg="white",
+                              padx=20, pady=8, command=self.build_game_ui_and_start)
+        btn_start.pack(pady=20)
+
+    def build_game_ui_and_start(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        header_frame = tk.Frame(self.root, bg="#f4f4f9")
+        header_frame.pack(fill=tk.X, pady=10)
+
+        self.title_label = tk.Label(header_frame, text="Balloon Analog Risk Task", font=("Arial", 20, "bold"),
+                                    bg="#f4f4f9", fg="#333")
+        self.title_label.pack()
+
+        self.progress_label = tk.Label(header_frame, text="", font=("Arial", 12), bg="#f4f4f9", fg="#666")
+        self.progress_label.pack()
+
+        self.game_frame = tk.Frame(self.root, bg="#f4f4f9")
+        self.game_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+        left_panel = tk.Frame(self.game_frame, bg="#f4f4f9")
+        left_panel.pack(side=tk.LEFT, expand=True, fill=tk.BOTH)
+
+        self.canvas = tk.Canvas(left_panel, width=400, height=350, bg="white", highlightthickness=1,
+                                highlightbackground="#ccc")
+        self.canvas.pack(pady=10)
+
+        btn_frame = tk.Frame(left_panel, bg="#f4f4f9")
+        btn_frame.pack(pady=10)
+
+        self.btn_pump = tk.Button(btn_frame, text="Pump Up Balloon (Space/Enter/5)", font=("Arial", 11, "bold"),
+                                  bg="#4CAF50", fg="white", padx=10, pady=8, command=self.pump_balloon)
+        self.btn_pump.grid(row=0, column=0, padx=10)
+
+        self.btn_collect = tk.Button(btn_frame, text="Collect Points (C/V/9)", font=("Arial", 11, "bold"), bg="#2196F3",
+                                     fg="white", padx=10, pady=8, command=self.collect_money)
+        self.btn_collect.grid(row=0, column=1, padx=10)
+
+        right_panel = tk.Frame(self.game_frame, bg="#e8e8ef", padx=15, pady=15, relief=tk.RIDGE, bd=2)
+        right_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=20)
+
+        tk.Label(right_panel, text="Scoreboard", font=("Arial", 14, "bold"), bg="#e8e8ef", fg="#333").pack(anchor="w",
+                                                                                                           pady=5)
+
+        self.lbl_temp_earned = tk.Label(right_panel, text="Current Earned: 0.00 Points", font=("Arial", 11), bg="#e8e8ef",
+                                        anchor="w")
+        self.lbl_temp_earned.pack(anchor="w", pady=5)
+
+        self.lbl_last_balloon = tk.Label(right_panel, text="Last Balloon: 0.00 Points", font=("Arial", 11), bg="#e8e8ef",
+                                         anchor="w")
+        self.lbl_last_balloon.pack(anchor="w", pady=5)
+
+        tk.Label(right_panel, text="", bg="#e8e8ef").pack(pady=10)
+
+        self.lbl_total_earned = tk.Label(right_panel, text="Total Earned: 0.00 Points", font=("Arial", 12, "bold"),
+                                         bg="#e8e8ef", fg="#2e7d32", anchor="w")
+        self.lbl_total_earned.pack(anchor="w", pady=5)
+
+        self.lbl_category_info = tk.Label(right_panel, text="", font=("Arial", 10, "italic"), bg="#e8e8ef", fg="#555",
+                                          justify=tk.LEFT)
+        self.lbl_category_info.pack(anchor="w", pady=15)
+
+        # Bind keyboard shortcuts
+        self.root.bind("<space>", lambda event: self.pump_balloon())
+        self.root.bind("<Return>", lambda event: self.pump_balloon())
+        self.root.bind("5", lambda event: self.pump_balloon())
+        self.root.bind("<KP_5>", lambda event: self.pump_balloon())
+
+        self.root.bind("c", lambda event: self.collect_money())
+        self.root.bind("C", lambda event: self.collect_money())
+        self.root.bind("v", lambda event: self.collect_money())
+        self.root.bind("V", lambda event: self.collect_money())
+        self.root.bind("9", lambda event: self.collect_money())
+        self.root.bind("<KP_9>", lambda event: self.collect_money())
+
+        self.load_next_trial()
+
+    def load_next_trial(self):
+        if self.current_trial_idx >= self.total_trials:
+            self.show_results_screen()
+            return
+
+        self.current_cat = self.trials[self.current_trial_idx]
+        self.max_pumps = self.current_cat["max_pumps"]
+        self.explosion_point = random.randint(1, self.max_pumps)
+        self.current_pumps = 0
+        self.current_bank = 0.0
+
+        self.progress_label.config(text=f"Trial {self.current_trial_idx + 1} of {self.total_trials}")
+        self.lbl_temp_earned.config(text="Current Points: 0.00")
+        self.lbl_last_balloon.config(text=f"Last Balloon Points: {self.last_balloon_earned:.2f}")
+        self.lbl_total_earned.config(text=f"Total Points: {self.total_earned:.2f}")
+
+        self.btn_pump.config(state=tk.NORMAL)
+        self.btn_collect.config(state=tk.NORMAL)
+
+        self.draw_balloon()
+
+    def draw_balloon(self):
+        self.canvas.delete("all")
+        base_radius = 30
+        radius = base_radius + int(self.current_pumps * 1.4)
+
+        center_x = 200
+        center_y = 175
+        color = self.current_cat["color"]
+
+        self.canvas.create_line(center_x, center_y + radius, center_x, center_y + radius + 80, fill="#666", width=2)
+        self.canvas.create_oval(center_x - radius, center_y - radius, center_x + radius, center_y + radius, fill=color,
+                                outline="#333", width=2)
+        self.canvas.create_polygon(center_x - 5, center_y + radius, center_x + 5, center_y + radius, center_x,
+                                   center_y + radius + 10, fill=color, outline="#333")
+
+    def pump_balloon(self):
+        # Ignore keypresses if buttons are disabled (e.g. during POP delay)
+        if str(self.btn_pump['state']) == tk.DISABLED:
+            return
+
+        self.current_pumps += 1
+        self.current_bank = self.current_pumps * 0.05
+        self.lbl_temp_earned.config(text=f"Current Points: {self.current_bank:.2f}")
+        self.draw_balloon()
+
+        if self.current_pumps >= self.explosion_point:
+            self.handle_explosion()
+
+    def handle_explosion(self):
+        cat_key = self.max_pumps
+        self.stats[cat_key]["pumps"].append(self.current_pumps)
+        self.stats[cat_key]["popped_pumps"].append(self.current_pumps)
+        self.stats[cat_key]["pops"] += 1
+
+        self.last_balloon_earned = 0.0
+        self.canvas.delete("all")
+        self.canvas.create_text(200, 175, text="POP!", font=("Arial", 32, "bold"), fill="red")
+
+        self.btn_pump.config(state=tk.DISABLED)
+        self.btn_collect.config(state=tk.DISABLED)
+
+        self.root.after(800, self.advance_trial)
+
+    def collect_money(self):
+        if str(self.btn_collect['state']) == tk.DISABLED:
+            return
+
+        if self.current_pumps == 0:
+            messagebox.showwarning("Notice", "You must pump the balloon at least once before collecting!")
+            return
+
+        cat_key = self.max_pumps
+        self.stats[cat_key]["pumps"].append(self.current_pumps)
+        self.stats[cat_key]["collected_pumps"].append(self.current_pumps)
+        self.stats[cat_key]["collected"] += 1
+
+        self.total_earned += self.current_bank
+        self.last_balloon_earned = self.current_bank
+
+        self.btn_pump.config(state=tk.DISABLED)
+        self.btn_collect.config(state=tk.DISABLED)
+
+        self.advance_trial()
+
+    def advance_trial(self):
+        self.current_trial_idx += 1
+        self.load_next_trial()
+
+    def show_results_screen(self):
+        # Unbind keyboard shortcuts on results screen
+        self.root.unbind("<space>")
+        self.root.unbind("<Return>")
+        self.root.unbind("5")
+        self.root.unbind("<KP_5>")
+        self.root.unbind("c")
+        self.root.unbind("C")
+        self.root.unbind("v")
+        self.root.unbind("V")
+        self.root.unbind("9")
+        self.root.unbind("<KP_9>")
+
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
+        results_frame = tk.Frame(self.root, bg="#f4f4f9", padx=20, pady=15)
+        results_frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(results_frame, text="Experiment Complete - Results Dashboard", font=("Arial", 16, "bold"),
+                 bg="#f4f4f9", fg="#222").pack(pady=2)
+        tk.Label(results_frame, text=f"Total Points Earned: {self.total_earned:.2f}", font=("Arial", 13, "bold"),
+                 bg="#f4f4f9", fg="#2e7d32").pack(pady=2)
+
+        # Aggregate Statistics
+        all_pumps = []
+        total_pops = 0
+        total_collected = 0
+        for k in self.stats:
+            all_pumps.extend(self.stats[k]["pumps"])
+            total_pops += self.stats[k]["pops"]
+            total_collected += self.stats[k]["collected"]
+
+        avg_pumps_overall = sum(all_pumps) / len(all_pumps) if all_pumps else 0
+        max_pumps_overall = max(all_pumps) if all_pumps else 0
+        min_blow_ups = min([len(self.stats[k]["popped_pumps"]) for k in self.stats])
+
+        summary_text = (
+            f"• Average Number of Pumps (Overall): {avg_pumps_overall:.2f}  |  "
+            f"• Average Balloons Collected: {total_collected} / {self.total_trials}\n"
+            f"• Highest Pump Count: {max_pumps_overall}  |  "
+            f"• Lowest Blow Ups (Category Min Pops): {min_blow_ups}"
+        )
+
+        tk.Label(results_frame, text=summary_text, font=("Arial", 10), bg="#e8e8ef", justify=tk.LEFT, padx=10, pady=5,
+                 relief=tk.SOLID, bd=1).pack(fill=tk.X, pady=5)
+
+        # User Performance Table
+        tk.Label(results_frame, text="Your Performance Breakdown:", font=("Arial", 11, "bold"), bg="#f4f4f9",
+                 fg="#333").pack(anchor="w", pady=(5, 2))
+
+        table_frame = tk.Frame(results_frame, bg="white", relief=tk.RIDGE, bd=2)
+        table_frame.pack(fill=tk.X, pady=2)
+
+        headers = ["Risk Level", "Assigned Color", "Pops / Collected", "Avg Popped Pump", "Avg Collected Pump"]
+        for col_idx, header in enumerate(headers):
+            lbl = tk.Label(table_frame, text=header, font=("Arial", 9, "bold"), bg="#ddd", padx=5, pady=4,
+                           borderwidth=1, relief="solid")
+            lbl.grid(row=0, column=col_idx, sticky="nsew")
+
+        row_items = [(128, "1/128 Risk"), (64, "1/64 Risk"), (32, "1/32 Risk")]
+
+        for idx, (max_p, risk_lbl) in enumerate(row_items, start=1):
+            cat_data = self.stats[max_p]
+            cat_def = next(c for c in self.category_definitions if c["max_pumps"] == max_p)
+            color_hex = cat_def["color"]
+            color_name = cat_def["color_name"]
+
+            popped_avg = sum(cat_data["popped_pumps"]) / len(cat_data["popped_pumps"]) if cat_data[
+                "popped_pumps"] else 0.0
+            collected_avg = sum(cat_data["collected_pumps"]) / len(cat_data["collected_pumps"]) if cat_data[
+                "collected_pumps"] else 0.0
+
+            row_values = [
+                risk_lbl,
+                f"{color_name} ({color_hex})",
+                f"{cat_data['pops']} pops / {cat_data['collected']} collected",
+                f"{popped_avg:.2f}",
+                f"{collected_avg:.2f}"
+            ]
+
+            for col_idx, val in enumerate(row_values):
+                bg_c = color_hex if col_idx == 1 else "white"
+                fg_c = "white" if col_idx == 1 and color_name in ["Blue", "Red", "Purple", "Pink"] else "black"
+                lbl = tk.Label(table_frame, text=val, font=("Arial", 9), bg=bg_c, fg=fg_c, padx=5, pady=4,
+                               borderwidth=1, relief="solid")
+                lbl.grid(row=idx, column=col_idx, sticky="nsew")
+
+        for c in range(len(headers)):
+            table_frame.grid_columnconfigure(c, weight=1)
+
+        # Reference Norms Comparison Table
+        tk.Label(results_frame, text="Normative Comparison (Lejuez et al., 2002 Table 1 Norms):",
+                 font=("Arial", 11, "bold"), bg="#f4f4f9", fg="#333").pack(anchor="w", pady=(10, 2))
+
+        norm_frame = tk.Frame(results_frame, bg="white", relief=tk.RIDGE, bd=2)
+        norm_frame.pack(fill=tk.X, pady=2)
+
+        norm_headers = ["Norm Category", "Total Avg Pumps (M ± SD)", "Adjusted Avg Pumps (M ± SD)",
+                        "Explosions (M ± SD)"]
+        for col_idx, header in enumerate(norm_headers):
+            lbl = tk.Label(norm_frame, text=header, font=("Arial", 9, "bold"), bg="#cfd8dc", padx=5, pady=4,
+                           borderwidth=1, relief="solid")
+            lbl.grid(row=0, column=col_idx, sticky="nsew")
+
+        norm_rows = [
+            ("Blue (1-128) - Men", "30.5 ± 10.1", "33.3 ± 13.2", "9.1 ± 4.5"),
+            ("Blue (1-128) - Women", "25.0 ± 9.6", "25.5 ± 11.5", "7.6 ± 4.5"),
+            ("Yellow (1-32) - Men", "11.1 ± 2.6", "12.3 ± 3.8", "16.5 ± 5.1"),
+            ("Yellow (1-32) - Women", "10.3 ± 2.5", "11.4 ± 3.8", "15.0 ± 4.5"),
+            ("Orange (1-8) - Men", "3.6 ± 0.6", "3.5 ± 1.1", "22.2 ± 4.5"),
+            ("Orange (1-8) - Women", "3.6 ± 0.6", "3.5 ± 1.0", "21.7 ± 4.0")
+        ]
+
+        for idx, row in enumerate(norm_rows, start=1):
+            for col_idx, val in enumerate(row):
+                lbl = tk.Label(norm_frame, text=val, font=("Arial", 8), bg="white", padx=5, pady=3, borderwidth=1,
+                               relief="solid")
+                lbl.grid(row=idx, column=col_idx, sticky="nsew")
+
+        for c in range(len(norm_headers)):
+            norm_frame.grid_columnconfigure(c, weight=1)
+
+        # Citation Section
+        citation_text = (
+            "Citation:\n"
+            "Lejuez, C. W., Read, J. P., Kahler, C. W., Richards, J. B., Ramsey, S. E., Stuart, G. L., "
+            "Strong, D. R., & Brown, R. A. (2002). Evaluation of a behavioral measure of risk taking: "
+            "the Balloon Analogue Risk Task (BART). Journal of experimental psychology. Applied, 8(2), 75–84. "
+            "https://doi.org/10.1037//1076-898x.8.2.75[cite: 4]"
+        )
+
+        lbl_citation = tk.Label(results_frame, text=citation_text, font=("Arial", 8, "italic"), bg="#f4f4f9", fg="#555",
+                                justify=tk.LEFT, wraplength=850)
+        lbl_citation.pack(anchor="w", pady=(10, 5))
+
+        btn_close = tk.Button(results_frame, text="Exit Application", font=("Arial", 10, "bold"), bg="#d9534f",
+                              fg="white", command=self.root.destroy, padx=10, pady=4)
+        btn_close.pack(pady=5)
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = BARTApp(root)
+    root.mainloop()
