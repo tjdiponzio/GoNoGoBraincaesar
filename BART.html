@@ -3,10 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Balloon Analog Risk Task (BART)</title>
+  <title>Balloon Analog Risk Task (BART) - Lejuez et al. (2002)</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    /* Prevent double-tap zoom & touch delay on mobile */
     button, canvas {
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
@@ -20,15 +19,16 @@
 <body class="bg-[#f4f4f9] text-gray-800 font-sans min-h-screen flex flex-col items-center p-3 sm:p-6">
 
   <div id="app" class="w-full max-w-4xl bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200 min-h-[600px] flex flex-col justify-center">
-    <!-- Content dynamically injected via JavaScript -->
+    <!-- Dynamic content injected via JS -->
   </div>
 
   <script>
-    // --- Data & State ---
+    // --- Data & State conforming to Lejuez et al. (2002) ---
+    // Risk Categories: 1/128, 1/32, 1/8
     const CATEGORY_DEFINITIONS = [
-      { max_pumps: 128 },
-      { max_pumps: 64 },
-      { max_pumps: 32 }
+      { max_pumps: 128, ratio_label: "1/128 Risk" },
+      { max_pumps: 32,  ratio_label: "1/32 Risk" },
+      { max_pumps: 8,   ratio_label: "1/8 Risk" }
     ];
 
     const COLOR_PALETTE = [
@@ -49,8 +49,8 @@
       lastBalloonEarned: 0.0,
       stats: {
         128: { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
-        64:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
-        32:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 }
+        32:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
+        8:   { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 }
       },
       currentCat: null,
       maxPumps: 0,
@@ -62,7 +62,6 @@
 
     const app = document.getElementById('app');
 
-    // Utility: Shuffle Array
     function shuffle(array) {
       for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -71,9 +70,8 @@
       return array;
     }
 
-    // Initialize session colors and trial sequence
     function initSession() {
-      // Pick 3 distinct random colors
+      // Pick 3 distinct random colors from the palette for each session
       const chosenColors = shuffle([...COLOR_PALETTE]).slice(0, 3);
       CATEGORY_DEFINITIONS.forEach((cat, idx) => {
         cat.color = chosenColors[idx].hex;
@@ -81,7 +79,7 @@
         cat.textDark = chosenColors[idx].textDark;
       });
 
-      // Build 90 trials (30 per category)
+      // Build 90 trials (30 per risk ratio category)
       let trials = [];
       CATEGORY_DEFINITIONS.forEach(cat => {
         for (let i = 0; i < 30; i++) {
@@ -95,8 +93,8 @@
       state.lastBalloonEarned = 0.0;
       state.stats = {
         128: { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
-        64:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
-        32:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 }
+        32:  { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 },
+        8:   { pumps: [], popped_pumps: [], collected_pumps: [], pops: 0, collected: 0 }
       };
 
       showInstructionsScreen();
@@ -107,24 +105,25 @@
       app.innerHTML = `
         <div class="p-6 sm:p-10 flex flex-col justify-between h-full">
           <div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-6">
-              Welcome to the Balloon Analog Risk Task (BART)
+            <h1 class="text-2xl sm:text-3xl font-bold text-center text-gray-800 mb-4">
+              Balloon Analog Risk Task (BART)
             </h1>
+            <p class="text-xs text-center text-gray-500 uppercase tracking-widest mb-6">Lejuez et al. (2002) Protocol</p>
             
             <div class="space-y-4 text-sm sm:text-base text-gray-700 leading-relaxed bg-gray-50 p-5 rounded-lg border border-gray-200">
-              <p>In this task, you will be presented with a series of <strong>90 balloon trials</strong>.</p>
+              <p>In this task, you will complete a series of <strong>90 balloon trials</strong> across three risk ratios (1/128, 1/32, and 1/8).</p>
               
               <ul class="list-disc pl-5 space-y-2">
                 <li>
-                  <strong>Pump Up Balloon</strong>: Each pump earns you <strong>0.05 points</strong> into your temporary bank.<br>
-                  <span class="text-xs sm:text-sm text-gray-500">Touch/Click button or press <strong>Space</strong>, <strong>Enter</strong>, or <strong>5</strong>.</span>
+                  <strong>Pump Balloon</strong>: Each pump earns <strong>0.05 points</strong> into your temporary bank.<br>
+                  <span class="text-xs sm:text-sm text-gray-500">Keyboard shortcuts: <strong>Space</strong>, <strong>Enter</strong>, or <strong>5</strong></span>
                 </li>
                 <li>
-                  <strong>Collect Points</strong>: Click collect before the balloon pops to transfer your temporary earnings to your Total Bank.<br>
-                  <span class="text-xs sm:text-sm text-gray-500">Touch/Click button or press <strong>C</strong>, <strong>V</strong>, or <strong>9</strong>.</span>
+                  <strong>Collect Points</strong>: Cash in your temporary bank before the balloon pops to add points to your Total Bank.<br>
+                  <span class="text-xs sm:text-sm text-gray-500">Keyboard shortcuts: <strong>C</strong>, <strong>V</strong>, or <strong>9</strong></span>
                 </li>
                 <li>
-                  <strong>The Risk</strong>: Each balloon has a hidden explosion point. If the balloon pops, you lose the points accumulated in that trial.
+                  <strong>The Risk</strong>: Balloon colors are randomly assigned per session. For a balloon category with maximum pumps N, the probability of explosion on pump <em>i</em> is exactly 1/(N - i + 1). If a balloon pops, points for that trial are lost.
                 </li>
               </ul>
             </div>
@@ -145,25 +144,21 @@
       document.getElementById('btn-start').addEventListener('click', buildGameUIAndStart);
     }
 
-    // --- Screen 2: Main Task Interface ---
+    // --- Screen 2: Task Play Screen ---
     function buildGameUIAndStart() {
       app.innerHTML = `
         <div class="p-4 sm:p-6 flex flex-col h-full">
-          <!-- Header -->
           <div class="text-center mb-4">
             <h2 class="text-xl sm:text-2xl font-bold text-gray-800">Balloon Analog Risk Task</h2>
             <div id="progress-label" class="text-xs sm:text-sm text-gray-500 font-medium mt-1">Trial 1 of 90</div>
           </div>
 
-          <!-- Main Layout -->
           <div class="flex flex-col lg:flex-row gap-6 items-stretch justify-center flex-grow">
-            <!-- Left Canvas & Controls Area -->
             <div class="flex-1 flex flex-col items-center justify-center bg-gray-50 p-4 rounded-xl border border-gray-200">
               <div class="relative w-full max-w-[360px] aspect-square flex items-center justify-center bg-white rounded-lg border border-gray-300 shadow-inner overflow-hidden mb-4">
                 <canvas id="balloonCanvas" width="360" height="320" class="w-full h-full"></canvas>
               </div>
 
-              <!-- Control Buttons -->
               <div class="grid grid-cols-2 gap-3 w-full max-w-[360px]">
                 <button id="btn-pump" class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold py-3.5 px-2 rounded-lg text-sm sm:text-base shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                   Pump Balloon<br><span class="text-[10px] sm:text-xs opacity-80">(Space / 5)</span>
@@ -174,7 +169,6 @@
               </div>
             </div>
 
-            <!-- Right Scoreboard -->
             <div class="w-full lg:w-72 bg-[#e8e8ef] p-5 rounded-xl border-2 border-gray-300 flex flex-col justify-between">
               <div>
                 <h3 class="text-lg font-bold text-gray-800 border-b border-gray-300 pb-2 mb-4">Scoreboard</h3>
@@ -186,6 +180,10 @@
                   <div>
                     <span class="text-xs text-gray-500 uppercase tracking-wider block">Last Balloon</span>
                     <span id="lbl-last-balloon" class="text-base font-medium text-gray-700">0.00 Points</span>
+                  </div>
+                  <div>
+                    <span class="text-xs text-gray-500 uppercase tracking-wider block">Risk Category</span>
+                    <span id="lbl-category-badge" class="inline-block mt-1 px-2.5 py-1 rounded text-xs font-bold text-white bg-gray-600">1/128 Risk</span>
                   </div>
                 </div>
               </div>
@@ -199,7 +197,6 @@
         </div>
       `;
 
-      // Event Listeners
       document.getElementById('btn-pump').addEventListener('click', pumpBalloon);
       document.getElementById('btn-collect').addEventListener('click', collectMoney);
       window.addEventListener('keydown', handleKeypress);
@@ -229,6 +226,8 @@
       state.isPopping = false;
       state.currentCat = state.trials[state.currentTrialIdx];
       state.maxPumps = state.currentCat.max_pumps;
+      
+      // Explosion point calculated uniformly from 1 to max_pumps (equivalent to 1/(N - i + 1) hazard rate)
       state.explosionPoint = Math.floor(Math.random() * state.maxPumps) + 1;
       state.currentPumps = 0;
       state.currentBank = 0.0;
@@ -237,6 +236,11 @@
       document.getElementById('lbl-temp-earned').innerText = `0.00 Points`;
       document.getElementById('lbl-last-balloon').innerText = `${state.lastBalloonEarned.toFixed(2)} Points`;
       document.getElementById('lbl-total-earned').innerText = `${state.totalEarned.toFixed(2)} Points`;
+
+      const badge = document.getElementById('lbl-category-badge');
+      badge.innerText = `${state.currentCat.ratio_label} (${state.currentCat.color_name})`;
+      badge.style.backgroundColor = state.currentCat.color;
+      badge.style.color = state.currentCat.textDark ? '#111' : '#fff';
 
       setButtonsState(true);
       drawBalloon();
@@ -248,8 +252,9 @@
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      const baseRadius = 30;
-      const radius = baseRadius + Math.floor(state.currentPumps * 1.4);
+      const baseRadius = 25;
+      const scaleFactor = state.maxPumps === 128 ? 1.2 : (state.maxPumps === 32 ? 2.5 : 8.0);
+      const radius = baseRadius + Math.min(state.currentPumps * scaleFactor, 110);
       const centerX = canvas.width / 2;
       const centerY = 140;
       const color = state.currentCat.color;
@@ -264,18 +269,18 @@
 
       // Draw Oval Balloon
       ctx.beginPath();
-      ctx.ellipse(centerX, centerY, radius, radius * 1.1, 0, 0, 2 * Math.PI);
+      ctx.ellipse(centerX, centerY, radius, radius * 1.15, 0, 0, 2 * Math.PI);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = "#333333";
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Draw Balloon Knot
+      // Draw Knot
       ctx.beginPath();
-      ctx.moveTo(centerX - 6, centerY + (radius * 1.1));
-      ctx.lineTo(centerX + 6, centerY + (radius * 1.1));
-      ctx.lineTo(centerX, centerY + (radius * 1.1) + 8);
+      ctx.moveTo(centerX - 6, centerY + (radius * 1.15));
+      ctx.lineTo(centerX + 6, centerY + (radius * 1.15));
+      ctx.lineTo(centerX, centerY + (radius * 1.15) + 8);
       ctx.closePath();
       ctx.fillStyle = color;
       ctx.fill();
@@ -305,11 +310,10 @@
       state.lastBalloonEarned = 0.0;
       setButtonsState(false);
 
-      // Draw POP Text
       const canvas = document.getElementById('balloonCanvas');
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.font = "bold 36px Arial";
+      ctx.font = "bold 38px sans-serif";
       ctx.fillStyle = "#e53935";
       ctx.textAlign = "center";
       ctx.fillText("POP!", canvas.width / 2, canvas.height / 2);
@@ -347,23 +351,24 @@
       loadNextTrial();
     }
 
-    // --- Screen 3: Results Dashboard ---
+    // --- Screen 3: Results Dashboard with Risk Ratio reporting ---
     function showResultsScreen() {
       window.removeEventListener('keydown', handleKeypress);
 
       let allPumps = [];
+      let allCollectedPumps = [];
       let totalPops = 0;
       let totalCollected = 0;
 
       Object.keys(state.stats).forEach(k => {
         allPumps.push(...state.stats[k].pumps);
+        allCollectedPumps.push(...state.stats[k].collected_pumps);
         totalPops += state.stats[k].pops;
         totalCollected += state.stats[k].collected;
       });
 
       const avgPumpsOverall = allPumps.length > 0 ? (allPumps.reduce((a, b) => a + b, 0) / allPumps.length) : 0;
-      const maxPumpsOverall = allPumps.length > 0 ? Math.max(...allPumps) : 0;
-      const minBlowUps = Math.min(...Object.keys(state.stats).map(k => state.stats[k].popped_pumps.length));
+      const adjustedAvgPumps = allCollectedPumps.length > 0 ? (allCollectedPumps.reduce((a, b) => a + b, 0) / allCollectedPumps.length) : 0;
 
       app.innerHTML = `
         <div class="p-4 sm:p-6 overflow-y-auto max-h-[90vh]">
@@ -374,46 +379,53 @@
             Total Points Earned: ${state.totalEarned.toFixed(2)}
           </p>
 
-          <!-- Aggregate Stats Banner -->
+          <!-- Core Metrics Summary -->
           <div class="bg-gray-100 border border-gray-300 rounded-lg p-3 sm:p-4 text-xs sm:text-sm text-gray-700 mb-5 leading-relaxed">
+            <h3 class="font-bold text-gray-800 mb-2">Key Outcome Variables (Lejuez et al., 2002):</h3>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>• <strong>Average Pumps (Overall):</strong> ${avgPumpsOverall.toFixed(2)}</div>
-              <div>• <strong>Balloons Collected:</strong> ${totalCollected} / ${state.totalTrials}</div>
-              <div>• <strong>Highest Pump Count:</strong> ${maxPumpsOverall}</div>
-              <div>• <strong>Min Pops (Category Low):</strong> ${minBlowUps}</div>
+              <div>• <strong>Overall Adjusted Avg Pumps:</strong> ${adjustedAvgPumps.toFixed(2)} (Primary Risk Index)</div>
+              <div>• <strong>Overall Total Avg Pumps:</strong> ${avgPumpsOverall.toFixed(2)}</div>
+              <div>• <strong>Total Explosion Count:</strong> ${totalPops} pops</div>
+              <div>• <strong>Total Cash-Ins:</strong> ${totalCollected} / ${state.totalTrials} balloons</div>
             </div>
           </div>
 
-          <!-- Performance Breakdown Table -->
-          <h3 class="text-sm font-bold text-gray-800 mb-2">Your Performance Breakdown:</h3>
+          <!-- Performance Breakdown Table by Risk Ratio -->
+          <h3 class="text-sm font-bold text-gray-800 mb-2">Performance Breakdown by Risk Ratio:</h3>
           <div class="overflow-x-auto mb-6">
             <table class="w-full text-xs sm:text-sm border-collapse border border-gray-300 text-center">
               <thead>
                 <tr class="bg-gray-200 text-gray-800">
-                  <th class="border border-gray-300 p-2">Risk Level</th>
+                  <th class="border border-gray-300 p-2">Risk Ratio</th>
                   <th class="border border-gray-300 p-2">Assigned Color</th>
                   <th class="border border-gray-300 p-2">Pops / Collected</th>
-                  <th class="border border-gray-300 p-2">Avg Popped Pump</th>
-                  <th class="border border-gray-300 p-2">Avg Collected Pump</th>
+                  <th class="border border-gray-300 p-2">Avg Pumps (Overall)</th>
+                  <th class="border border-gray-300 p-2">Adjusted Avg Pumps (Unexploded)</th>
+                  <th class="border border-gray-300 p-2">Points Earned</th>
                 </tr>
               </thead>
               <tbody>
-                ${[128, 64, 32].map(maxP => {
+                ${[128, 32, 8].map(maxP => {
                   const catData = state.stats[maxP];
                   const catDef = CATEGORY_DEFINITIONS.find(c => c.max_pumps === maxP);
-                  const poppedAvg = catData.popped_pumps.length ? (catData.popped_pumps.reduce((a,b)=>a+b,0)/catData.popped_pumps.length).toFixed(2) : "0.00";
-                  const collectedAvg = catData.collected_pumps.length ? (catData.collected_pumps.reduce((a,b)=>a+b,0)/catData.collected_pumps.length).toFixed(2) : "0.00";
+                  const totalPumpsList = catData.pumps;
+                  const adjPumpsList = catData.collected_pumps;
+                  
+                  const avgPumps = totalPumpsList.length ? (totalPumpsList.reduce((a,b)=>a+b,0)/totalPumpsList.length).toFixed(2) : "0.00";
+                  const adjAvg = adjPumpsList.length ? (adjPumpsList.reduce((a,b)=>a+b,0)/adjPumpsList.length).toFixed(2) : "0.00";
+                  const categoryPoints = (adjPumpsList.reduce((a,b)=>a+b,0) * 0.05).toFixed(2);
                   const textColor = catDef.textDark ? "text-gray-900" : "text-white";
 
                   return `
                     <tr class="hover:bg-gray-50">
-                      <td class="border border-gray-300 p-2 font-medium">1/${maxP} Risk</td>
+                      <td class="border border-gray-300 p-2 font-bold">${catDef.ratio_label} (Max ${maxP})</td>
                       <td class="border border-gray-300 p-2 font-semibold ${textColor}" style="background-color: ${catDef.color}">
                         ${catDef.color_name} (${catDef.color})
                       </td>
                       <td class="border border-gray-300 p-2">${catData.pops} pops / ${catData.collected} collected</td>
-                      <td class="border border-gray-300 p-2">${poppedAvg}</td>
-                      <td class="border border-gray-300 p-2">${collectedAvg}</td>
+                      <td class="border border-gray-300 p-2">${avgPumps}</td>
+                      <td class="border border-gray-300 p-2 font-bold text-blue-700">${adjAvg}</td>
+                      <td class="border border-gray-300 p-2 text-green-700 font-medium">${categoryPoints}</td>
                     </tr>
                   `;
                 }).join('')}
@@ -421,25 +433,28 @@
             </table>
           </div>
 
-          <!-- Normative Comparison Table -->
-          <h3 class="text-sm font-bold text-gray-800 mb-2">Normative Comparison (Lejuez et al., 2002 Table 1 Norms):</h3>
+          <!-- Normative Comparison Table by Risk Ratio (Lejuez et al., 2002 Table 1) -->
+          <h3 class="text-sm font-bold text-gray-800 mb-2">Normative Comparison by Risk Ratio (Lejuez et al., 2002 Table 1 Norms):</h3>
           <div class="overflow-x-auto mb-4">
             <table class="w-full text-[11px] sm:text-xs border-collapse border border-gray-300 text-center">
               <thead>
                 <tr class="bg-blue-100 text-gray-800">
-                  <th class="border border-gray-300 p-1.5">Norm Category</th>
+                  <th class="border border-gray-300 p-1.5">Risk Ratio</th>
+                  <th class="border border-gray-300 p-1.5">Demographic Group</th>
                   <th class="border border-gray-300 p-1.5">Total Avg Pumps (M ± SD)</th>
                   <th class="border border-gray-300 p-1.5">Adjusted Avg Pumps (M ± SD)</th>
-                  <th class="border border-gray-300 p-1.5">Explosions (M ± SD)</th>
+                  <th class="border border-gray-300 p-1.5">Explosion Frequency (M ± SD)</th>
                 </tr>
               </thead>
               <tbody class="bg-white">
-                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Blue (1-128) - Men</td><td class="border border-gray-300 p-1.5">30.5 ± 10.1</td><td class="border border-gray-300 p-1.5">33.3 ± 13.2</td><td class="border border-gray-300 p-1.5">9.1 ± 4.5</td></tr>
-                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Blue (1-128) - Women</td><td class="border border-gray-300 p-1.5">25.0 ± 9.6</td><td class="border border-gray-300 p-1.5">25.5 ± 11.5</td><td class="border border-gray-300 p-1.5">7.6 ± 4.5</td></tr>
-                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Yellow (1-32) - Men</td><td class="border border-gray-300 p-1.5">11.1 ± 2.6</td><td class="border border-gray-300 p-1.5">12.3 ± 3.8</td><td class="border border-gray-300 p-1.5">16.5 ± 5.1</td></tr>
-                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Yellow (1-32) - Women</td><td class="border border-gray-300 p-1.5">10.3 ± 2.5</td><td class="border border-gray-300 p-1.5">11.4 ± 3.8</td><td class="border border-gray-300 p-1.5">15.0 ± 4.5</td></tr>
-                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Orange (1-8) - Men</td><td class="border border-gray-300 p-1.5">3.6 ± 0.6</td><td class="border border-gray-300 p-1.5">3.5 ± 1.1</td><td class="border border-gray-300 p-1.5">22.2 ± 4.5</td></tr>
-                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Orange (1-8) - Women</td><td class="border border-gray-300 p-1.5">3.6 ± 0.6</td><td class="border border-gray-300 p-1.5">3.5 ± 1.0</td><td class="border border-gray-300 p-1.5">21.7 ± 4.0</td></tr>
+                <tr><td class="border border-gray-300 p-1.5 font-bold" rowspan="2">1/128 High Risk</td><td class="border border-gray-300 p-1.5 text-left font-medium">Men</td><td class="border border-gray-300 p-1.5">30.5 ± 10.1</td><td class="border border-gray-300 p-1.5 font-semibold">33.3 ± 13.2</td><td class="border border-gray-300 p-1.5">9.1 ± 4.5</td></tr>
+                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Women</td><td class="border border-gray-300 p-1.5">25.0 ± 9.6</td><td class="border border-gray-300 p-1.5 font-semibold">25.5 ± 11.5</td><td class="border border-gray-300 p-1.5">7.6 ± 4.5</td></tr>
+                
+                <tr><td class="border border-gray-300 p-1.5 font-bold bg-gray-50" rowspan="2">1/32 Medium Risk</td><td class="border border-gray-300 p-1.5 text-left font-medium bg-gray-50">Men</td><td class="border border-gray-300 p-1.5 bg-gray-50">11.1 ± 2.6</td><td class="border border-gray-300 p-1.5 font-semibold bg-gray-50">12.3 ± 3.8</td><td class="border border-gray-300 p-1.5 bg-gray-50">16.5 ± 5.1</td></tr>
+                <tr><td class="border border-gray-300 p-1.5 text-left font-medium bg-gray-50">Women</td><td class="border border-gray-300 p-1.5 bg-gray-50">10.3 ± 2.5</td><td class="border border-gray-300 p-1.5 font-semibold bg-gray-50">11.4 ± 3.8</td><td class="border border-gray-300 p-1.5 bg-gray-50">15.0 ± 4.5</td></tr>
+                
+                <tr><td class="border border-gray-300 p-1.5 font-bold" rowspan="2">1/8 Low Risk</td><td class="border border-gray-300 p-1.5 text-left font-medium">Men</td><td class="border border-gray-300 p-1.5">3.6 ± 0.6</td><td class="border border-gray-300 p-1.5 font-semibold">3.5 ± 1.1</td><td class="border border-gray-300 p-1.5">22.2 ± 4.5</td></tr>
+                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Women</td><td class="border border-gray-300 p-1.5">3.6 ± 0.6</td><td class="border border-gray-300 p-1.5 font-semibold">3.5 ± 1.0</td><td class="border border-gray-300 p-1.5">21.7 ± 4.0</td></tr>
               </tbody>
             </table>
           </div>
@@ -460,7 +475,6 @@
       document.getElementById('btn-restart').addEventListener('click', initSession);
     }
 
-    // Launch Application on Load
     window.addEventListener('DOMContentLoaded', initSession);
   </script>
 </body>
