@@ -24,7 +24,6 @@
 
   <script>
     // --- Data & State conforming to Lejuez et al. (2002) ---
-    // Risk Categories: 1/128, 1/32, 1/8
     const CATEGORY_DEFINITIONS = [
       { max_pumps: 128, ratio_label: "1/128 Risk" },
       { max_pumps: 32,  ratio_label: "1/32 Risk" },
@@ -60,8 +59,6 @@
       isPopping: false
     };
 
-    const app = document.getElementById('app');
-
     function shuffle(array) {
       for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -71,7 +68,6 @@
     }
 
     function initSession() {
-      // Pick 3 distinct random colors from the palette for each session
       const chosenColors = shuffle([...COLOR_PALETTE]).slice(0, 3);
       CATEGORY_DEFINITIONS.forEach((cat, idx) => {
         cat.color = chosenColors[idx].hex;
@@ -79,7 +75,6 @@
         cat.textDark = chosenColors[idx].textDark;
       });
 
-      // Build 90 trials (30 per risk ratio category)
       let trials = [];
       CATEGORY_DEFINITIONS.forEach(cat => {
         for (let i = 0; i < 30; i++) {
@@ -102,6 +97,8 @@
 
     // --- Screen 1: Instructions ---
     function showInstructionsScreen() {
+      const app = document.getElementById('app');
+      if (!app) return;
       app.innerHTML = `
         <div class="p-6 sm:p-10 flex flex-col justify-between h-full">
           <div>
@@ -123,7 +120,7 @@
                   <span class="text-xs sm:text-sm text-gray-500">Keyboard shortcuts: <strong>C</strong>, <strong>V</strong>, or <strong>9</strong></span>
                 </li>
                 <li>
-                  <strong>The Risk</strong>: Balloon colors are randomly assigned per session. For a balloon category with maximum pumps N, the probability of explosion on pump <em>i</em> is exactly 1/(N - i + 1). If a balloon pops, points for that trial are lost.
+                  <strong>The Risk</strong>: Balloon colors are randomly assigned per session. Risk thresholds are hidden. If a balloon pops, points for that trial are lost.
                 </li>
               </ul>
             </div>
@@ -146,6 +143,8 @@
 
     // --- Screen 2: Task Play Screen ---
     function buildGameUIAndStart() {
+      const app = document.getElementById('app');
+      if (!app) return;
       app.innerHTML = `
         <div class="p-4 sm:p-6 flex flex-col h-full">
           <div class="text-center mb-4">
@@ -180,10 +179,6 @@
                   <div>
                     <span class="text-xs text-gray-500 uppercase tracking-wider block">Last Balloon</span>
                     <span id="lbl-last-balloon" class="text-base font-medium text-gray-700">0.00 Points</span>
-                  </div>
-                  <div>
-                    <span class="text-xs text-gray-500 uppercase tracking-wider block">Risk Category</span>
-                    <span id="lbl-category-badge" class="inline-block mt-1 px-2.5 py-1 rounded text-xs font-bold text-white bg-gray-600">1/128 Risk</span>
                   </div>
                 </div>
               </div>
@@ -227,7 +222,6 @@
       state.currentCat = state.trials[state.currentTrialIdx];
       state.maxPumps = state.currentCat.max_pumps;
       
-      // Explosion point calculated uniformly from 1 to max_pumps (equivalent to 1/(N - i + 1) hazard rate)
       state.explosionPoint = Math.floor(Math.random() * state.maxPumps) + 1;
       state.currentPumps = 0;
       state.currentBank = 0.0;
@@ -236,11 +230,6 @@
       document.getElementById('lbl-temp-earned').innerText = `0.00 Points`;
       document.getElementById('lbl-last-balloon').innerText = `${state.lastBalloonEarned.toFixed(2)} Points`;
       document.getElementById('lbl-total-earned').innerText = `${state.totalEarned.toFixed(2)} Points`;
-
-      const badge = document.getElementById('lbl-category-badge');
-      badge.innerText = `${state.currentCat.ratio_label} (${state.currentCat.color_name})`;
-      badge.style.backgroundColor = state.currentCat.color;
-      badge.style.color = state.currentCat.textDark ? '#111' : '#fff';
 
       setButtonsState(true);
       drawBalloon();
@@ -253,8 +242,9 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const baseRadius = 25;
-      const scaleFactor = state.maxPumps === 128 ? 1.2 : (state.maxPumps === 32 ? 2.5 : 8.0);
-      const radius = baseRadius + Math.min(state.currentPumps * scaleFactor, 110);
+      const growthPerPump = 3.5;
+      const radius = baseRadius + Math.min(state.currentPumps * growthPerPump, 110);
+      
       const centerX = canvas.width / 2;
       const centerY = 140;
       const color = state.currentCat.color;
@@ -342,8 +332,10 @@
     }
 
     function setButtonsState(enabled) {
-      document.getElementById('btn-pump').disabled = !enabled;
-      document.getElementById('btn-collect').disabled = !enabled;
+      const btnPump = document.getElementById('btn-pump');
+      const btnCollect = document.getElementById('btn-collect');
+      if (btnPump) btnPump.disabled = !enabled;
+      if (btnCollect) btnCollect.disabled = !enabled;
     }
 
     function advanceTrial() {
@@ -370,6 +362,8 @@
       const avgPumpsOverall = allPumps.length > 0 ? (allPumps.reduce((a, b) => a + b, 0) / allPumps.length) : 0;
       const adjustedAvgPumps = allCollectedPumps.length > 0 ? (allCollectedPumps.reduce((a, b) => a + b, 0) / allCollectedPumps.length) : 0;
 
+      const app = document.getElementById('app');
+      if (!app) return;
       app.innerHTML = `
         <div class="p-4 sm:p-6 overflow-y-auto max-h-[90vh]">
           <h2 class="text-xl sm:text-2xl font-bold text-center text-gray-800 mb-1">
@@ -396,7 +390,7 @@
             <table class="w-full text-xs sm:text-sm border-collapse border border-gray-300 text-center">
               <thead>
                 <tr class="bg-gray-200 text-gray-800">
-                  <th class="border border-gray-300 p-2">Risk Ratio</th>
+                  <th class="border border-gray-300 p-2">Risk Category</th>
                   <th class="border border-gray-300 p-2">Assigned Color</th>
                   <th class="border border-gray-300 p-2">Pops / Collected</th>
                   <th class="border border-gray-300 p-2">Avg Pumps (Overall)</th>
@@ -418,7 +412,7 @@
 
                   return `
                     <tr class="hover:bg-gray-50">
-                      <td class="border border-gray-300 p-2 font-bold">${catDef.ratio_label} (Max ${maxP})</td>
+                      <td class="border border-gray-300 p-2 font-bold">${catDef.ratio_label}</td>
                       <td class="border border-gray-300 p-2 font-semibold ${textColor}" style="background-color: ${catDef.color}">
                         ${catDef.color_name} (${catDef.color})
                       </td>
@@ -429,32 +423,6 @@
                     </tr>
                   `;
                 }).join('')}
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Normative Comparison Table by Risk Ratio (Lejuez et al., 2002 Table 1) -->
-          <h3 class="text-sm font-bold text-gray-800 mb-2">Normative Comparison by Risk Ratio (Lejuez et al., 2002 Table 1 Norms):</h3>
-          <div class="overflow-x-auto mb-4">
-            <table class="w-full text-[11px] sm:text-xs border-collapse border border-gray-300 text-center">
-              <thead>
-                <tr class="bg-blue-100 text-gray-800">
-                  <th class="border border-gray-300 p-1.5">Risk Ratio</th>
-                  <th class="border border-gray-300 p-1.5">Demographic Group</th>
-                  <th class="border border-gray-300 p-1.5">Total Avg Pumps (M ± SD)</th>
-                  <th class="border border-gray-300 p-1.5">Adjusted Avg Pumps (M ± SD)</th>
-                  <th class="border border-gray-300 p-1.5">Explosion Frequency (M ± SD)</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white">
-                <tr><td class="border border-gray-300 p-1.5 font-bold" rowspan="2">1/128 High Risk</td><td class="border border-gray-300 p-1.5 text-left font-medium">Men</td><td class="border border-gray-300 p-1.5">30.5 ± 10.1</td><td class="border border-gray-300 p-1.5 font-semibold">33.3 ± 13.2</td><td class="border border-gray-300 p-1.5">9.1 ± 4.5</td></tr>
-                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Women</td><td class="border border-gray-300 p-1.5">25.0 ± 9.6</td><td class="border border-gray-300 p-1.5 font-semibold">25.5 ± 11.5</td><td class="border border-gray-300 p-1.5">7.6 ± 4.5</td></tr>
-                
-                <tr><td class="border border-gray-300 p-1.5 font-bold bg-gray-50" rowspan="2">1/32 Medium Risk</td><td class="border border-gray-300 p-1.5 text-left font-medium bg-gray-50">Men</td><td class="border border-gray-300 p-1.5 bg-gray-50">11.1 ± 2.6</td><td class="border border-gray-300 p-1.5 font-semibold bg-gray-50">12.3 ± 3.8</td><td class="border border-gray-300 p-1.5 bg-gray-50">16.5 ± 5.1</td></tr>
-                <tr><td class="border border-gray-300 p-1.5 text-left font-medium bg-gray-50">Women</td><td class="border border-gray-300 p-1.5 bg-gray-50">10.3 ± 2.5</td><td class="border border-gray-300 p-1.5 font-semibold bg-gray-50">11.4 ± 3.8</td><td class="border border-gray-300 p-1.5 bg-gray-50">15.0 ± 4.5</td></tr>
-                
-                <tr><td class="border border-gray-300 p-1.5 font-bold" rowspan="2">1/8 Low Risk</td><td class="border border-gray-300 p-1.5 text-left font-medium">Men</td><td class="border border-gray-300 p-1.5">3.6 ± 0.6</td><td class="border border-gray-300 p-1.5 font-semibold">3.5 ± 1.1</td><td class="border border-gray-300 p-1.5">22.2 ± 4.5</td></tr>
-                <tr><td class="border border-gray-300 p-1.5 text-left font-medium">Women</td><td class="border border-gray-300 p-1.5">3.6 ± 0.6</td><td class="border border-gray-300 p-1.5 font-semibold">3.5 ± 1.0</td><td class="border border-gray-300 p-1.5">21.7 ± 4.0</td></tr>
               </tbody>
             </table>
           </div>
